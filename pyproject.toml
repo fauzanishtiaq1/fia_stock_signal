@@ -1,0 +1,30 @@
+[project]
+name = "stock-signals"
+version = "0.1.0"
+description = "Personal 3-horizon (1wk/3mo/1yr) stock ranking pipeline and site"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+    "duckdb>=1.0",
+    "requests>=2.32",
+    "python-dotenv>=1.0",
+    "lxml>=5.0",
+    "feedparser>=6.0",
+]
+
+[project.scripts]
+stock-signals-smoke = "stock_signals.smoke:main"
+stock-signals-nightly = "stock_signals.pipeline:main"
+
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/stock_signals"]
+
+[tool.ruff]
+line-length = 100

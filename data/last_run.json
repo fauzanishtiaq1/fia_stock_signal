@@ -1,0 +1,35 @@
+{
+  "run_at_utc": "2026-07-04T21:49:16.639287+00:00",
+  "steps": {
+    "setup": {
+      "ok": true,
+      "rows": 0,
+      "detail": "db at /Users/fauzanishtiaq/stock-signals/data/signals.duckdb"
+    },
+    "universe": {
+      "ok": true,
+      "rows": 503,
+      "detail": "universe refreshed"
+    },
+    "events": {
+      "ok": true,
+      "rows": 256,
+      "detail": "8-K + SCHEDULE 13D filings"
+    },
+    "macro": {
+      "ok": true,
+      "rows": 0,
+      "detail": "skipped (no FRED_API_KEY)"
+    },
+    "prices": {
+      "ok": true,
+      "rows": 0,
+      "detail": "skipped (no FMP_API_KEY)"
+    },
+    "news": {
+      "ok": true,
+      "rows": 1250,
+      "detail": "25 symbols"
+    }
+  }
+}
