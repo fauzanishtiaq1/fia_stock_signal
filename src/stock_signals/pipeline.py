@@ -58,18 +58,18 @@ def _ingest_events(con: duckdb.DuckDBPyConnection, cfg: Config) -> StepResult:
 
 def _ingest_macro(con: duckdb.DuckDBPyConnection, cfg: Config) -> StepResult:
     """FRED default series into macro."""
-    from stock_signals.ingest.fred import FredSource
+    from stock_signals.ingest.fred import DEFAULT_SERIES, FredSource
 
     src = FredSource(cfg)
     total = 0
     errors = 0
-    for series_id in FredSource.DEFAULT_SERIES:
+    for series_id in DEFAULT_SERIES:
         try:
             total += db.upsert_df(con, "macro", src.series_observations(series_id, start=MACRO_START))
         except Exception as exc:  # noqa: BLE001
             errors += 1
             log.warning("macro series %s failed: %s", series_id, exc)
-    n = len(FredSource.DEFAULT_SERIES)
+    n = len(DEFAULT_SERIES)
     if n and errors == n:
         raise RuntimeError(f"all {n} FRED series failed")
     detail = f"{n} series since {MACRO_START}" + (f", {errors} errors" if errors else "")
@@ -157,7 +157,19 @@ def main() -> int:
     if steps["setup"]["ok"]:
         assert cfg is not None and con is not None
 
-        # (b) universe — always
+        # (b) restore parquet snapshots committed by previous runs
+        def _restore() -> StepResult:
+            from stock_signals.persist import import_tables
+
+            pq_dir = cfg.data_dir / "parquet"
+            if not pq_dir.is_dir():
+                return 0, "no parquet dir"
+            counts = import_tables(con, pq_dir)
+            return sum(counts.values()), f"{len(counts)} tables restored"
+
+        _run_step(steps, "restore", _restore)
+
+        # (c) universe — always
         def _universe() -> StepResult:
             from stock_signals.universe import refresh_universe
 
@@ -166,27 +178,37 @@ def main() -> int:
 
         _run_step(steps, "universe", _universe)
 
-        # (c) EDGAR events
+        # (d) EDGAR events
         _run_step(steps, "events", lambda: _ingest_events(con, cfg))
 
-        # (d) macro (FRED)
+        # (e) macro (FRED)
         if cfg.fred_key:
             _run_step(steps, "macro", lambda: _ingest_macro(con, cfg))
         else:
             steps["macro"] = {"ok": True, "rows": 0, "detail": "skipped (no FRED_API_KEY)"}
 
-        # (e) prices (FMP)
+        # (f) prices (FMP)
         if cfg.fmp_key:
             _run_step(steps, "prices", lambda: _ingest_prices(con, cfg))
         else:
             steps["prices"] = {"ok": True, "rows": 0, "detail": "skipped (no FMP_API_KEY)"}
 
-        # (f) news RSS
+        # (g) news RSS
         _run_step(steps, "news", lambda: _ingest_news(con, cfg))
+
+        # (h) persist tables to parquet so CI can commit them back
+        def _persist() -> StepResult:
+            from stock_signals.persist import export_tables
+
+            counts = export_tables(con, cfg.data_dir / "parquet")
+            total = sum(counts.values())
+            return total, f"{len(counts)} tables exported ({total} rows)"
+
+        _run_step(steps, "persist", _persist)
 
         con.close()
 
-    # (g) last_run.json + summary
+    # (i) last_run.json + summary
     payload = {"run_at_utc": datetime.now(timezone.utc).isoformat(), "steps": steps}
     data_dir = cfg.data_dir if cfg is not None else PROJECT_ROOT / "data"
     try:

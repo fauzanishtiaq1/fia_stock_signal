@@ -1,0 +1,245 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Stock Signals</title>
+  <style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --text: #1b1f24; --muted: #5c6470;
+  --border: #e2e5ea; --accent: #2563eb;
+  --pos: #15803d; --neg: #b91c1c;
+  --banner-bg: #fdf3d7; --banner-text: #6f5205; --banner-border: #eddfad;
+  --chip-bg: #edeff3;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #101215; --surface: #181b20; --text: #e7eaee; --muted: #98a1ac;
+    --border: #2a2f37; --accent: #82a7ff;
+    --pos: #4ade80; --neg: #f87171;
+    --banner-bg: #29230f; --banner-text: #e8cf83; --banner-border: #493e1a;
+    --chip-bg: #242932;
+  }
+}
+* { box-sizing: border-box; }
+html, body { max-width: 100%; overflow-x: hidden; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+.wrap { max-width: 980px; margin: 0 auto; padding: 2.25rem 1.25rem 3rem; }
+header h1 { margin: 0 0 .35rem; font-size: 1.7rem; letter-spacing: -.01em; }
+.meta { margin: 0; color: var(--muted); }
+.banner {
+  margin: 1.4rem 0; padding: .8rem 1.1rem; border-radius: 10px;
+  background: var(--banner-bg); color: var(--banner-text);
+  border: 1px solid var(--banner-border); font-weight: 600;
+}
+.tabs {
+  display: flex; flex-wrap: wrap; gap: .25rem;
+  margin: 1.75rem 0 0; border-bottom: 1px solid var(--border);
+}
+.tab-btn {
+  appearance: none; background: none; border: none; cursor: pointer;
+  padding: .6rem .95rem; margin-bottom: -1px;
+  font: inherit; font-weight: 600; color: var(--muted);
+  border-bottom: 2px solid transparent;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.panel { display: none; padding-top: 1.1rem; }
+.panel.active { display: block; }
+.caption { margin: .2rem 0 1.2rem; color: var(--muted); max-width: 72ch; }
+h2 { margin: 1.6rem 0 .55rem; font-size: 1rem; }
+.table-wrap {
+  overflow-x: auto; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px;
+}
+table { border-collapse: collapse; width: 100%; min-width: 700px; font-size: .92rem; }
+th, td {
+  text-align: left; padding: .55rem .85rem; vertical-align: top;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody tr:last-child td { border-bottom: none; }
+th {
+  color: var(--muted); font-weight: 600; font-size: .74rem;
+  text-transform: uppercase; letter-spacing: .05em;
+}
+td.symbol { font-weight: 600; }
+td.score { font-weight: 600; font-variant-numeric: tabular-nums; }
+table.top td.score { color: var(--pos); }
+table.avoid td.score { color: var(--neg); }
+td.factors { white-space: normal; min-width: 260px; }
+.chips { display: flex; flex-wrap: wrap; gap: .3rem; }
+.chip {
+  display: inline-block; padding: .08rem .55rem; border-radius: 999px;
+  background: var(--chip-bg); font-size: .78rem; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+td.empty { color: var(--muted); font-style: italic; white-space: normal; }
+footer {
+  margin-top: 2.75rem; padding-top: 1.1rem; border-top: 1px solid var(--border);
+  color: var(--muted); font-size: .85rem;
+}
+footer p { margin: .25rem 0; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>Stock Signals</h1>
+      <p class="meta">Run date 2026-07-05 &middot; 40 of 503 symbols scored</p>
+    </header>
+    <div class="banner" role="note">Personal research tool — not investment advice.</div>
+    <nav class="tabs" role="tablist" aria-label="Horizon">
+      <button class="tab-btn active" id="tab-1w" data-tab="1w" role="tab" aria-selected="true" aria-controls="panel-1w">1 Week</button>
+      <button class="tab-btn" id="tab-3m" data-tab="3m" role="tab" aria-selected="false" aria-controls="panel-3m">3 Months</button>
+      <button class="tab-btn" id="tab-1y" data-tab="1y" role="tab" aria-selected="false" aria-controls="panel-1y">1 Year</button>
+    </nav>
+
+    <section class="panel active" id="panel-1w" role="tabpanel" aria-labelledby="tab-1w">
+      <p class="caption">Attention watchlist — short-horizon signals are the weakest and highest-turnover. Backtest pending.</p>
+      <h2>Top candidates</h2>
+      <div class="table-wrap">
+        <table class="top" data-horizon="1w" data-list="top">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2>Avoid / weakest</h2>
+      <div class="table-wrap">
+        <table class="avoid" data-horizon="1w" data-list="avoid">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel" id="panel-3m" role="tabpanel" aria-labelledby="tab-3m">
+      <p class="caption">12-1 momentum ranking. Backtest pending.</p>
+      <h2>Top candidates</h2>
+      <div class="table-wrap">
+        <table class="top" data-horizon="3m" data-list="top">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2>Avoid / weakest</h2>
+      <div class="table-wrap">
+        <table class="avoid" data-horizon="3m" data-list="avoid">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <section class="panel" id="panel-1y" role="tabpanel" aria-labelledby="tab-1y">
+      <p class="caption">Preview: momentum + low-volatility blend until fundamentals land (Phase 1). Backtest pending.</p>
+      <h2>Top candidates</h2>
+      <div class="table-wrap">
+        <table class="top" data-horizon="1y" data-list="top">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <h2>Avoid / weakest</h2>
+      <div class="table-wrap">
+        <table class="avoid" data-horizon="1y" data-list="avoid">
+          <thead><tr><th>Rank</th><th>Symbol</th><th>Name</th><th>Sector</th><th>Score</th><th>Factors</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+    <noscript><p class="caption">Enable JavaScript to see the ranked tables.</p></noscript>
+    <footer>
+      <p>Generated 2026-07-05 07:44 UTC.</p>
+      <p>Data sources: EDGAR, FMP, Twelve Data, Tiingo, FRED, Google News.</p>
+      <p>Phase 0 — ingestion and preview rankings only; factor backtests land in Phase 1.</p>
+    </footer>
+  </div>
+  <script type="application/json" id="ss-data">{"run_date":"2026-07-05","coverage":{"scored":40,"total":503},"horizons":{"1w":{"top":[{"rank":1,"symbol":"ADI","name":"Analog Devices","sector":"Information Technology","composite":1.0,"factors":[{"name":"reversal_5d","value":-0.09755222166391497,"pctile":1.0}]},{"rank":2,"symbol":"AMAT","name":"Applied Materials","sector":"Information Technology","composite":0.975,"factors":[{"name":"reversal_5d","value":-0.09724550898203599,"pctile":0.975}]},{"rank":3,"symbol":"ALB","name":"Albemarle Corporation","sector":"Materials","composite":0.95,"factors":[{"name":"reversal_5d","value":-0.038922367954626114,"pctile":0.95}]},{"rank":4,"symbol":"A","name":"Agilent Technologies","sector":"Health Care","composite":0.925,"factors":[{"name":"reversal_5d","value":-0.03371786774938412,"pctile":0.925}]},{"rank":5,"symbol":"ANET","name":"Arista Networks","sector":"Information Technology","composite":0.9,"factors":[{"name":"reversal_5d","value":-0.033000906618313564,"pctile":0.9}]},{"rank":6,"symbol":"APA","name":"APA Corporation","sector":"Energy","composite":0.875,"factors":[{"name":"reversal_5d","value":-0.03171753441053271,"pctile":0.875}]},{"rank":7,"symbol":"AMD","name":"Advanced Micro Devices","sector":"Information Technology","composite":0.85,"factors":[{"name":"reversal_5d","value":-0.027695889742193502,"pctile":0.85}]},{"rank":8,"symbol":"AME","name":"Ametek","sector":"Industrials","composite":0.825,"factors":[{"name":"reversal_5d","value":-0.026271010583108434,"pctile":0.825}]},{"rank":9,"symbol":"APO","name":"Apollo Global Management","sector":"Financials","composite":0.8,"factors":[{"name":"reversal_5d","value":-0.023866348448687402,"pctile":0.8}]},{"rank":10,"symbol":"AMT","name":"American Tower","sector":"Real Estate","composite":0.775,"factors":[{"name":"reversal_5d","value":-0.015943575154101497,"pctile":0.775}]}],"avoid":[{"rank":-1,"symbol":"APP","name":"AppLovin","sector":"Information Technology","composite":0.025,"factors":[{"name":"reversal_5d","value":0.18193438432040887,"pctile":0.025}]},{"rank":-2,"symbol":"AJG","name":"Arthur J. Gallagher & Co.","sector":"Financials","composite":0.05,"factors":[{"name":"reversal_5d","value":0.15872578720279074,"pctile":0.05}]},{"rank":-3,"symbol":"ADBE","name":"Adobe Inc.","sector":"Information Technology","composite":0.075,"factors":[{"name":"reversal_5d","value":0.13603226306809368,"pctile":0.075}]},{"rank":-4,"symbol":"AON","name":"Aon plc","sector":"Financials","composite":0.1,"factors":[{"name":"reversal_5d","value":0.13138154771324584,"pctile":0.1}]},{"rank":-5,"symbol":"APD","name":"Air Products","sector":"Materials","composite":0.125,"factors":[{"name":"reversal_5d","value":0.1290180329025341,"pctile":0.125}]},{"rank":-6,"symbol":"AAPL","name":"Apple Inc.","sector":"Information Technology","composite":0.15,"factors":[{"name":"reversal_5d","value":0.12167908413592587,"pctile":0.15}]},{"rank":-7,"symbol":"ADP","name":"Automatic Data Processing","sector":"Industrials","composite":0.175,"factors":[{"name":"reversal_5d","value":0.1200129443853728,"pctile":0.175}]},{"rank":-8,"symbol":"ADSK","name":"Autodesk","sector":"Information Technology","composite":0.2,"factors":[{"name":"reversal_5d","value":0.093553997786328,"pctile":0.2}]},{"rank":-9,"symbol":"ACN","name":"Accenture","sector":"Information Technology","composite":0.225,"factors":[{"name":"reversal_5d","value":0.09163884914957876,"pctile":0.225}]},{"rank":-10,"symbol":"ACGL","name":"Arch Capital Group","sector":"Financials","composite":0.25,"factors":[{"name":"reversal_5d","value":0.08343050991201117,"pctile":0.25}]}]},"3m":{"top":[{"rank":1,"symbol":"AMD","name":"Advanced Micro Devices","sector":"Information Technology","composite":1.0,"factors":[{"name":"momentum_12_1","value":2.8317537286018655,"pctile":1.0}]},{"rank":2,"symbol":"ALB","name":"Albemarle Corporation","sector":"Materials","composite":0.975,"factors":[{"name":"momentum_12_1","value":1.7608242919530426,"pctile":0.975}]},{"rank":3,"symbol":"AMAT","name":"Applied Materials","sector":"Information Technology","composite":0.95,"factors":[{"name":"momentum_12_1","value":1.6867159350481091,"pctile":0.95}]},{"rank":4,"symbol":"APA","name":"APA Corporation","sector":"Energy","composite":0.925,"factors":[{"name":"momentum_12_1","value":1.078604256794966,"pctile":0.925}]},{"rank":5,"symbol":"AKAM","name":"Akamai Technologies","sector":"Information Technology","composite":0.9,"factors":[{"name":"momentum_12_1","value":1.0138173596281872,"pctile":0.9}]},{"rank":6,"symbol":"APP","name":"AppLovin","sector":"Information Technology","composite":0.875,"factors":[{"name":"momentum_12_1","value":0.7987763224330986,"pctile":0.875}]},{"rank":7,"symbol":"ADI","name":"Analog Devices","sector":"Information Technology","composite":0.85,"factors":[{"name":"momentum_12_1","value":0.7822876151146194,"pctile":0.85}]},{"rank":8,"symbol":"ANET","name":"Arista Networks","sector":"Information Technology","composite":0.825,"factors":[{"name":"momentum_12_1","value":0.7726215751693462,"pctile":0.825}]},{"rank":9,"symbol":"ADM","name":"Archer Daniels Midland","sector":"Consumer Staples","composite":0.8,"factors":[{"name":"momentum_12_1","value":0.5626003591409083,"pctile":0.8}]},{"rank":10,"symbol":"APH","name":"Amphenol","sector":"Information Technology","composite":0.775,"factors":[{"name":"momentum_12_1","value":0.5317616436428314,"pctile":0.775}]}],"avoid":[{"rank":-1,"symbol":"ACN","name":"Accenture","sector":"Information Technology","composite":0.025,"factors":[{"name":"momentum_12_1","value":-0.3681429299968002,"pctile":0.025}]},{"rank":-2,"symbol":"AJG","name":"Arthur J. Gallagher & Co.","sector":"Financials","composite":0.05,"factors":[{"name":"momentum_12_1","value":-0.35080686493433144,"pctile":0.05}]},{"rank":-3,"symbol":"ABT","name":"Abbott Laboratories","sector":"Health Care","composite":0.075,"factors":[{"name":"momentum_12_1","value":-0.34864868263029025,"pctile":0.075}]},{"rank":-4,"symbol":"ADBE","name":"Adobe Inc.","sector":"Information Technology","composite":0.1,"factors":[{"name":"momentum_12_1","value":-0.33152257077276204,"pctile":0.1}]},{"rank":-5,"symbol":"ADSK","name":"Autodesk","sector":"Information Technology","composite":0.125,"factors":[{"name":"momentum_12_1","value":-0.24067122276767094,"pctile":0.125}]},{"rank":-6,"symbol":"ADP","name":"Automatic Data Processing","sector":"Industrials","composite":0.15,"factors":[{"name":"momentum_12_1","value":-0.2397239885545681,"pctile":0.15}]},{"rank":-7,"symbol":"AMP","name":"Ameriprise Financial","sector":"Financials","composite":0.175,"factors":[{"name":"momentum_12_1","value":-0.16203822560705794,"pctile":0.175}]},{"rank":-8,"symbol":"AMT","name":"American Tower","sector":"Real Estate","composite":0.2,"factors":[{"name":"momentum_12_1","value":-0.14956492324739923,"pctile":0.2}]},{"rank":-9,"symbol":"AOS","name":"A. O. Smith","sector":"Industrials","composite":0.225,"factors":[{"name":"momentum_12_1","value":-0.14462640289754536,"pctile":0.225}]},{"rank":-10,"symbol":"ALGN","name":"Align Technology","sector":"Health Care","composite":0.25,"factors":[{"name":"momentum_12_1","value":-0.14201152975087505,"pctile":0.25}]}]},"1y":{"top":[{"rank":1,"symbol":"AEP","name":"American Electric Power","sector":"Utilities","composite":0.8125,"factors":[{"name":"momentum_12_1","value":0.2560238708688869,"pctile":0.675},{"name":"low_vol_252","value":0.011778871923239155,"pctile":0.95}]},{"rank":2,"symbol":"AAPL","name":"Apple Inc.","sector":"Information Technology","composite":0.8,"factors":[{"name":"momentum_12_1","value":0.5227406703126904,"pctile":0.75},{"name":"low_vol_252","value":0.015224238341005933,"pctile":0.85}]},{"rank":3,"symbol":"AEE","name":"Ameren","sector":"Utilities","composite":0.775,"factors":[{"name":"momentum_12_1","value":0.1314103781374094,"pctile":0.55},{"name":"low_vol_252","value":0.010555121099772215,"pctile":1.0}]},{"rank":4,"symbol":"AME","name":"Ametek","sector":"Industrials","composite":0.775,"factors":[{"name":"momentum_12_1","value":0.2499641627810798,"pctile":0.65},{"name":"low_vol_252","value":0.014334630533410988,"pctile":0.9}]},{"rank":5,"symbol":"AIZ","name":"Assurant","sector":"Financials","composite":0.75,"factors":[{"name":"momentum_12_1","value":0.27176380213499973,"pctile":0.7},{"name":"low_vol_252","value":0.015493399710799991,"pctile":0.8}]},{"rank":6,"symbol":"AFL","name":"Aflac","sector":"Financials","composite":0.7375,"factors":[{"name":"momentum_12_1","value":0.09721976352019257,"pctile":0.5},{"name":"low_vol_252","value":0.010923437347912164,"pctile":0.975}]},{"rank":7,"symbol":"ADM","name":"Archer Daniels Midland","sector":"Consumer Staples","composite":0.6875,"factors":[{"name":"momentum_12_1","value":0.5626003591409083,"pctile":0.8},{"name":"low_vol_252","value":0.01669677419470243,"pctile":0.575}]},{"rank":8,"symbol":"ALL","name":"Allstate","sector":"Financials","composite":0.675,"factors":[{"name":"momentum_12_1","value":0.07271641219087499,"pctile":0.475},{"name":"low_vol_252","value":0.01516289061124454,"pctile":0.875}]},{"rank":9,"symbol":"ACGL","name":"Arch Capital Group","sector":"Financials","composite":0.6625000000000001,"factors":[{"name":"momentum_12_1","value":-0.04240437158469945,"pctile":0.4},{"name":"low_vol_252","value":0.013391570187119804,"pctile":0.925}]},{"rank":10,"symbol":"ABBV","name":"AbbVie","sector":"Health Care","composite":0.6125,"factors":[{"name":"momentum_12_1","value":0.17094817763749592,"pctile":0.625},{"name":"low_vol_252","value":0.016243621476054158,"pctile":0.6}]}],"avoid":[{"rank":-1,"symbol":"ACN","name":"Accenture","sector":"Information Technology","composite":0.15000000000000002,"factors":[{"name":"momentum_12_1","value":-0.3681429299968002,"pctile":0.025},{"name":"low_vol_252","value":0.02570576634297857,"pctile":0.275}]},{"rank":-2,"symbol":"ALGN","name":"Align Technology","sector":"Health Care","composite":0.2,"factors":[{"name":"momentum_12_1","value":-0.14201152975087505,"pctile":0.25},{"name":"low_vol_252","value":0.03398796841681229,"pctile":0.15}]},{"rank":-3,"symbol":"ADBE","name":"Adobe Inc.","sector":"Information Technology","composite":0.21250000000000002,"factors":[{"name":"momentum_12_1","value":-0.33152257077276204,"pctile":0.1},{"name":"low_vol_252","value":0.022357598574600394,"pctile":0.325}]},{"rank":-4,"symbol":"ADSK","name":"Autodesk","sector":"Information Technology","composite":0.25,"factors":[{"name":"momentum_12_1","value":-0.24067122276767094,"pctile":0.125},{"name":"low_vol_252","value":0.021709207419268933,"pctile":0.375}]},{"rank":-5,"symbol":"AJG","name":"Arthur J. Gallagher & Co.","sector":"Financials","composite":0.275,"factors":[{"name":"momentum_12_1","value":-0.35080686493433144,"pctile":0.05},{"name":"low_vol_252","value":0.018362020322215563,"pctile":0.5}]},{"rank":-6,"symbol":"APO","name":"Apollo Global Management","sector":"Financials","composite":0.3375,"factors":[{"name":"momentum_12_1","value":-0.07590671977488916,"pctile":0.375},{"name":"low_vol_252","value":0.022581415480841947,"pctile":0.3}]},{"rank":-7,"symbol":"AMCR","name":"Amcor","sector":"Materials","composite":0.35,"factors":[{"name":"momentum_12_1","value":-0.13861188512302913,"pctile":0.275},{"name":"low_vol_252","value":0.020090962246653667,"pctile":0.425}]},{"rank":-8,"symbol":"ABT","name":"Abbott Laboratories","sector":"Health Care","composite":0.4125,"factors":[{"name":"momentum_12_1","value":-0.34864868263029025,"pctile":0.075},{"name":"low_vol_252","value":0.015784592400291817,"pctile":0.75}]},{"rank":-9,"symbol":"AOS","name":"A. O. Smith","sector":"Industrials","composite":0.425,"factors":[{"name":"momentum_12_1","value":-0.14462640289754536,"pctile":0.225},{"name":"low_vol_252","value":0.01619656740400157,"pctile":0.625}]},{"rank":-10,"symbol":"AMP","name":"Ameriprise Financial","sector":"Financials","composite":0.42500000000000004,"factors":[{"name":"momentum_12_1","value":-0.16203822560705794,"pctile":0.175},{"name":"low_vol_252","value":0.016039253330453935,"pctile":0.675}]}]}}}</script>
+  <script>
+(function () {
+  "use strict";
+  var data = JSON.parse(document.getElementById("ss-data").textContent);
+
+  function fmtValue(v) {
+    if (typeof v !== "number" || !isFinite(v)) return "\u2014";
+    if (Math.abs(v) < 3) {
+      return (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "%";
+    }
+    return v.toFixed(2);
+  }
+
+  function fmtPctile(p) {
+    if (typeof p !== "number" || !isFinite(p)) return "";
+    var x = p <= 1 ? p * 100 : p;
+    x = Math.max(0, Math.min(99, Math.round(x)));
+    return "p" + x;
+  }
+
+  function chip(f) {
+    var span = document.createElement("span");
+    span.className = "chip";
+    var pt = fmtPctile(f.pctile);
+    span.textContent = f.name + " " + fmtValue(f.value) + (pt ? " \u00b7 " + pt : "");
+    return span;
+  }
+
+  function fill(tbody, rows) {
+    if (!rows.length) {
+      var tr = document.createElement("tr");
+      var td = document.createElement("td");
+      td.colSpan = 6;
+      td.className = "empty";
+      td.textContent = "No picks for this horizon yet.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+    rows.forEach(function (r) {
+      var tr = document.createElement("tr");
+      function cell(text, cls) {
+        var td = document.createElement("td");
+        if (cls) td.className = cls;
+        td.textContent = text;
+        tr.appendChild(td);
+      }
+      cell(String(r.rank));
+      cell(r.symbol, "symbol");
+      cell(r.name || "\u2014");
+      cell(r.sector || "\u2014");
+      cell((r.composite * 100).toFixed(1), "score");
+      var td = document.createElement("td");
+      td.className = "factors";
+      var chips = document.createElement("div");
+      chips.className = "chips";
+      (r.factors || []).forEach(function (f) { chips.appendChild(chip(f)); });
+      td.appendChild(chips);
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+    });
+  }
+
+  document.querySelectorAll("table[data-horizon]").forEach(function (t) {
+    var h = data.horizons[t.getAttribute("data-horizon")] || { top: [], avoid: [] };
+    fill(t.querySelector("tbody"), h[t.getAttribute("data-list")] || []);
+  });
+
+  var buttons = document.querySelectorAll(".tab-btn");
+  buttons.forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      buttons.forEach(function (b) {
+        b.classList.toggle("active", b === btn);
+        b.setAttribute("aria-selected", b === btn ? "true" : "false");
+      });
+      document.querySelectorAll(".panel").forEach(function (p) {
+        p.classList.toggle("active", p.id === "panel-" + btn.getAttribute("data-tab"));
+      });
+    });
+  });
+})();
+</script>
+</body>
+</html>
