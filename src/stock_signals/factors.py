@@ -130,7 +130,12 @@ def compute_and_store(
     global max date are dropped.
     """
     run_date = run_date or date.today()
-    px = con.execute("SELECT symbol, date, adj_close FROM prices_daily").df()
+    # Join universe so non-universe symbols in prices_daily (e.g. the SPY
+    # benchmark) are never ranked or picked.
+    px = con.execute(
+        "SELECT p.symbol, p.date, p.adj_close FROM prices_daily p "
+        "JOIN universe u USING (symbol)"
+    ).df()
     if px.empty:
         return {
             h: {"eligible": 0, "mode": "preview" if h == "1y" else "full"} for h in HORIZONS

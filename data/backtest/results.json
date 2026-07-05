@@ -1,0 +1,89 @@
+{
+  "1w": {
+    "horizon": "1w",
+    "n_rebalances": 61,
+    "start": "2025-05-02",
+    "end": "2026-07-02",
+    "top": {
+      "cagr": 0.35044213026792703,
+      "vol": 0.2577173285560123,
+      "sharpe": 1.2934518653044471,
+      "max_drawdown": -0.13395513209220533,
+      "total_return": 0.422519928321494
+    },
+    "bottom": {
+      "cagr": 1.1499913037640455,
+      "vol": 0.30596762595621185,
+      "sharpe": 2.6678983827929112,
+      "max_drawdown": -0.08852705643412839,
+      "total_return": 1.4545609745386088
+    },
+    "spread_total_return": -1.0320410462171148,
+    "avg_turnover": 0.9426229508196723,
+    "benchmark": {
+      "total_return": 0.33256344596862797,
+      "cagr": 0.27729532025866455
+    },
+    "cost_bps": 10.0,
+    "top_n": 10,
+    "warning": "sample too short for a reliable verdict (<3y)"
+  },
+  "3m": {
+    "horizon": "3m",
+    "n_rebalances": 3,
+    "start": "2026-04-30",
+    "end": "2026-07-02",
+    "top": {
+      "cagr": 0.751105911540193,
+      "vol": 0.6669132034993749,
+      "sharpe": 1.08086364580559,
+      "max_drawdown": -0.15137800423367398,
+      "total_return": 0.15034498511866712
+    },
+    "bottom": {
+      "cagr": -0.0849079319417777,
+      "vol": 0.2826425926227351,
+      "sharpe": -0.2149160485656434,
+      "max_drawdown": -0.0990982091016327,
+      "total_return": -0.02193842370744048
+    },
+    "spread_total_return": 0.1722834088261076,
+    "avg_turnover": 0.19999999999999998,
+    "benchmark": {
+      "total_return": 0.038987170235143864,
+      "cagr": 0.16530802990470406
+    },
+    "cost_bps": 10.0,
+    "top_n": 10,
+    "warning": "sample too short for a reliable verdict (<3y)"
+  },
+  "1y": {
+    "horizon": "1y",
+    "n_rebalances": 3,
+    "start": "2026-04-30",
+    "end": "2026-07-02",
+    "top": {
+      "cagr": 0.18851958475823372,
+      "vol": 0.17427013096004038,
+      "sharpe": 1.0554210105697208,
+      "max_drawdown": 0.0,
+      "total_return": 0.04412281513363614
+    },
+    "bottom": {
+      "cagr": -0.0017023906648755416,
+      "vol": 0.38819735861554494,
+      "sharpe": 0.12970602919255117,
+      "max_drawdown": -0.12286956712074282,
+      "total_return": -0.00042586963641011444
+    },
+    "spread_total_return": 0.044548684770046254,
+    "avg_turnover": 0.43333333333333335,
+    "benchmark": {
+      "total_return": 0.038987170235143864,
+      "cagr": 0.16530802990470406
+    },
+    "cost_bps": 10.0,
+    "top_n": 10,
+    "warning": "sample too short for a reliable verdict (<3y)"
+  }
+}

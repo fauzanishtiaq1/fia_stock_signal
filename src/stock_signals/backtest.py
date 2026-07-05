@@ -244,10 +244,16 @@ def run_backtest(
     prev_top: dict[str, float] = {}
     prev_bot: dict[str, float] = {}
 
+    # A benchmark (or any long-history symbol) can stretch the calendar into
+    # years before the ranked universe has data; skip rebalance dates where
+    # too few symbols are scoreable instead of failing on them.
+    min_scoreable = max(2, min(top_n, len(rankable.columns)))
+    used: list[pd.Timestamp] = []
     for t, t_next in zip(rebal[:-1], rebal[1:]):
         comp = _composite(rankable.loc[:t], horizon).dropna()
-        if comp.empty:
-            raise ValueError(f"no symbol has enough history to score at {t.date()}")
+        if len(comp) < min_scoreable:
+            continue
+        used.extend([t, t_next])
         n = min(top_n, len(comp))
         top_syms = list(comp.nlargest(n).index)
         bot_syms = list(comp.nsmallest(n).index)
@@ -261,8 +267,13 @@ def run_backtest(
         bot_rets.append(r_bot)
         top_turns.append(turn_top)
 
+    if len(top_rets) < 2:
+        raise ValueError(
+            f"not enough scoreable rebalance periods for horizon {horizon!r} "
+            f"(need >= {min_scoreable} rankable symbols per date)"
+        )
     ppy = _PERIODS_PER_YEAR[horizon]
-    start_date, end_date = rebal[0], rebal[-1]
+    start_date, end_date = used[0], used[-1]
     years_calendar = (end_date - start_date).days / 365.25
     top = _leg_metrics(top_rets, ppy)
     bottom = _leg_metrics(bot_rets, ppy)

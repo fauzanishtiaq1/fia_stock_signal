@@ -21,24 +21,28 @@ from stock_signals.config import Config, load_config
 log = logging.getLogger("backfill")
 
 
-def _fetcher(source: str, cfg: Config):
+def _fetcher(source: str, cfg: Config, interval: float | None = None):
     """Return (callable(symbol) -> DataFrame) for the chosen source."""
     if source == "twelvedata":
         from stock_signals.ingest.twelvedata import TwelveDataSource
 
         src = TwelveDataSource(cfg)
-        return lambda s: src.daily_prices(s, outputsize=300)
-    if source == "tiingo":
+        fn = lambda s: src.daily_prices(s, outputsize=300)  # noqa: E731
+    elif source == "tiingo":
         from stock_signals.ingest.tiingo import TiingoSource
 
         src = TiingoSource(cfg)
-        return lambda s: src.daily_history(s, start=_args.start)
-    if source == "fmp":
+        fn = lambda s: src.daily_history(s, start=_args.start)  # noqa: E731
+    elif source == "fmp":
         from stock_signals.ingest.fmp import FmpSource
 
         src = FmpSource(cfg)
-        return lambda s: src.daily_prices(s, start=_args.start)
-    raise SystemExit(f"unknown source: {source}")
+        fn = lambda s: src.daily_prices(s, start=_args.start)  # noqa: E731
+    else:
+        raise SystemExit(f"unknown source: {source}")
+    if interval is not None:
+        src.min_interval = interval
+    return fn
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,6 +56,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--min-rows", type=int, default=200,
                         help="skip symbols that already have this many rows")
     parser.add_argument("--db", default=None, help="override database path")
+    parser.add_argument("--interval", type=float, default=None,
+                        help="override seconds between requests (e.g. 73 for "
+                             "Tiingo's 50/hour free tier)")
     _args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.INFO,
@@ -70,7 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     log.info("%d symbols total, %d already filled, %d to fetch via %s",
              len(symbols), len(symbols) - len(todo), len(todo), _args.source)
 
-    fetch = _fetcher(_args.source, cfg)
+    fetch = _fetcher(_args.source, cfg, interval=_args.interval)
     written = errors = 0
     for i, symbol in enumerate(todo, start=1):
         try:
