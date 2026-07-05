@@ -166,7 +166,7 @@ def test_1y_preview_mode_below_coverage_threshold(full_con):
     # Fundamentals exist for only 2 symbols: far below the default threshold.
     counts = compute_and_store(full_con, run_date=RUN_DATE)
     assert counts["1y"] == {"eligible": 3, "mode": "preview"}
-    assert counts["1w"] == {"eligible": 3, "mode": "full"}
+    assert counts["1w"] == {"eligible": 3, "mode": "full", "social": False}
     factors_1y = {
         r[0]
         for r in full_con.execute(
