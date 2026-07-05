@@ -196,7 +196,26 @@ def main() -> int:
         # (g) news RSS
         _run_step(steps, "news", lambda: _ingest_news(con, cfg))
 
-        # (h) persist tables to parquet so CI can commit them back
+        # (h) factor scores -> scores/picks tables
+        def _scores() -> StepResult:
+            from stock_signals.factors import compute_and_store
+
+            counts = compute_and_store(con)
+            detail = ", ".join(f"{h}:{n}" for h, n in counts.items())
+            return sum(counts.values()), f"eligible {detail}"
+
+        _run_step(steps, "scores", _scores)
+
+        # (i) regenerate the static site from the latest picks
+        def _site() -> StepResult:
+            from stock_signals.sitegen import generate
+
+            path = generate(con)
+            return 0, str(path)
+
+        _run_step(steps, "site", _site)
+
+        # (j) persist tables to parquet so CI can commit them back
         def _persist() -> StepResult:
             from stock_signals.persist import export_tables
 

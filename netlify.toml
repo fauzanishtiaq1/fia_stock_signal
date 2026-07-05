@@ -1,0 +1,7 @@
+# Static publish of the nightly-generated site — no build step needed.
+# Connect this repo in Netlify (or drag-and-drop the data/site folder at
+# https://app.netlify.com/drop) and every nightly data commit auto-deploys.
+
+[build]
+  publish = "data/site"
+  command = "true"
