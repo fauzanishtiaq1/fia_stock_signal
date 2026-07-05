@@ -10,6 +10,7 @@ dependencies = [
     "python-dotenv>=1.0",
     "lxml>=5.0",
     "feedparser>=6.0",
+    "vadersentiment>=3.3.2",
 ]
 
 [project.scripts]

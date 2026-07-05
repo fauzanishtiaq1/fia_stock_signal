@@ -21,16 +21,19 @@ def _insert_fixture(con) -> None:
         "('XYZ', 'Xyz Corp', 'Industrials', '0000789019'), "
         "('ABC', 'Abc Holdings', 'Financials', NULL)"
     )
-    top_breakdown = json.dumps(
-        {
-            "mom12-1": {"value": 0.342, "pctile": 0.87},
-            "vol": {"value": 12.5, "pctile": 0.12},
-        }
+    base_factors = {
+        "mom12-1": {"value": 0.342, "pctile": 0.87},
+        "vol": {"value": 12.5, "pctile": 0.12},
+    }
+    top_breakdown = json.dumps(base_factors)
+    # The 1w top row carries the social attention factor plus the froth flag.
+    top_breakdown_1w = json.dumps(
+        base_factors | {"attention": {"value": 3.4, "pctile": 0.9}, "froth": True}
     )
     sell_breakdown = json.dumps({"mom12-1": {"value": -0.21, "pctile": 0.03}})
     for horizon in ("1w", "3m", "1y"):
         rows = [
-            (1, "AAPL", 0.91, top_breakdown),
+            (1, "AAPL", 0.91, top_breakdown_1w if horizon == "1w" else top_breakdown),
             (-1, "XYZ", 0.08, sell_breakdown),
             (-2, "ABC", 0.12, sell_breakdown),
         ]
@@ -163,3 +166,47 @@ def test_recent_deal_filings(con, tmp_path):
     # Out-of-universe and stale filings never reach the page.
     assert OUTSIDE_URL not in html
     assert STALE_URL not in html
+
+
+def test_crowded_badge_and_attention_chip(con, tmp_path):
+    _insert_fixture(con)
+
+    out = sitegen.generate(con, out_path=tmp_path / "index.html")
+    html = out.read_text(encoding="utf-8")
+
+    match = re.search(
+        r'<script type="application/json" id="ss-data">(.*?)</script>',
+        html,
+        re.DOTALL,
+    )
+    assert match, "embedded JSON data block missing"
+    payload = json.loads(match.group(1))
+
+    # The froth flag survives into the payload row that drives the chip.
+    top_1w = payload["horizons"]["1w"]["buy"][0]
+    assert top_1w["froth"] is True
+    factors = {f["name"]: f for f in top_1w["factors"]}
+    assert factors["attention"] == {"name": "attention", "value": 3.4, "pctile": 0.9}
+    # Rows whose breakdown has no froth key never get the chip.
+    assert all(row["froth"] is False for row in payload["horizons"]["1w"]["sell"])
+    assert payload["horizons"]["3m"]["buy"][0]["froth"] is False
+
+    # Crowded warning chip: rendered only for froth rows, amber-styled, with
+    # the contrarian-signal tooltip via the title attribute.
+    assert "if (r.froth) chips.appendChild(crowdedChip());" in html
+    assert 'span.className = "chip crowded";' in html
+    assert 'span.textContent = "crowded";' in html
+    assert "span.title = " in html
+    assert "High mention spike with extreme bullishness" in html
+    assert "historically a contrarian signal" in html
+    assert ".chip.crowded" in html  # styled for light + dark themes
+
+    # Attention values render as a multiplier (×N.N), not a percent.
+    assert 'f.name === "attention" ? fmtMult(f.value) : fmtValue(f.value)' in html
+    assert '"\\u00d7" + v.toFixed(1)' in html
+
+    # 1w caption explains the attention factor and the crowded badge.
+    assert (
+        "Attention = social mention spikes (Reddit/Bluesky); a 'crowded' "
+        "badge is a warning, not a buy signal." in html
+    )

@@ -52,7 +52,7 @@ def scored_con(con):
     db.upsert_df(con, "prices_daily", _synthetic_prices())
     counts = compute_and_store(con, run_date=RUN_DATE)
     assert counts == {
-        "1w": {"eligible": 4, "mode": "full"},
+        "1w": {"eligible": 4, "mode": "full", "social": False},  # empty social_posts
         "3m": {"eligible": 4, "mode": "full"},
         "1y": {"eligible": 4, "mode": "preview"},  # no fundamentals in this db
     }
@@ -112,3 +112,108 @@ def test_scores_pctiles_within_unit_interval(scored_con):
     ).fetchone()
     assert n > 0
     assert 0.0 <= lo <= hi <= 1.0
+
+
+# --------------------------------------------------------------------------
+# 1w social attention factor
+# --------------------------------------------------------------------------
+
+ANCHOR = pd.Timestamp("2026-07-04 12:00:00")  # newest post; sets the 24h window
+
+
+def _social_posts() -> pd.DataFrame:
+    """Seed posts: FLAT gets a big bullish spike, CHOPPY a steady trickle.
+
+    FLAT: 20 mentions inside the last 24h, all bullish, zero baseline ->
+    attention_spike = 20 / max(0, 0.5) = 40 and bullish_ratio = 1.0 (froth).
+    CHOPPY: 2 non-bullish recent mentions on a 1/day baseline over the prior
+    14 days -> attention_spike = 2.0, no froth. STEADY_UP/CRASHER: no posts.
+    """
+    rows = [
+        (f"flat-{i}", "reddit", "FLAT", ANCHOR - pd.Timedelta(hours=i), 0.7)
+        for i in range(20)
+    ]
+    rows += [
+        ("choppy-r0", "bluesky", "CHOPPY", ANCHOR - pd.Timedelta(hours=2), -0.3),
+        ("choppy-r1", "reddit", "CHOPPY", ANCHOR - pd.Timedelta(hours=5), 0.0),
+    ]
+    rows += [
+        (f"choppy-b{k}", "reddit", "CHOPPY", ANCHOR - pd.Timedelta(hours=25 + 24 * k), None)
+        for k in range(14)
+    ]
+    frame = pd.DataFrame(rows, columns=["id", "platform", "symbol", "created", "sentiment"])
+    return frame.astype({"sentiment": "float64"})
+
+
+def test_1w_social_attention_and_froth(scored_con):
+    con = scored_con
+
+    def composites_1w():
+        return dict(
+            con.execute(
+                "SELECT symbol, value FROM scores "
+                "WHERE horizon = '1w' AND factor = 'composite'"
+            ).fetchall()
+        )
+
+    def other_composites():
+        return con.execute(
+            "SELECT horizon, symbol, value FROM scores "
+            "WHERE horizon IN ('3m', '1y') AND factor = 'composite' ORDER BY 1, 2"
+        ).fetchall()
+
+    # Baseline run (empty social_posts): 1w composite is exactly the pure
+    # reversal pctile — no 0.7 shrinkage — and no attention rows exist.
+    base = composites_1w()
+    reversal_pct = dict(
+        con.execute(
+            "SELECT symbol, pctile FROM scores "
+            "WHERE horizon = '1w' AND factor = 'reversal_5d'"
+        ).fetchall()
+    )
+    assert base == pytest.approx(reversal_pct)
+    assert not con.execute("SELECT * FROM scores WHERE factor = 'attention'").fetchall()
+    base_other = other_composites()
+
+    db.upsert_df(con, "social_posts", _social_posts())
+    counts = compute_and_store(con, run_date=RUN_DATE)
+    assert counts["1w"] == {"eligible": 4, "mode": "full", "social": True}
+
+    # Attention score rows exist only for symbols with mentions; the pctile
+    # is ranked within that mentioned set (FLAT tops it, CHOPPY is median).
+    attn = {
+        sym: (value, pctile)
+        for sym, value, pctile in con.execute(
+            "SELECT symbol, value, pctile FROM scores WHERE factor = 'attention'"
+        ).fetchall()
+    }
+    assert attn == {
+        "FLAT": (pytest.approx(40.0), pytest.approx(1.0)),
+        "CHOPPY": (pytest.approx(2.0), pytest.approx(0.5)),
+    }
+
+    new = composites_1w()
+    # The bullish spike boosts FLAT's 1w composite vs the no-social baseline.
+    assert new["FLAT"] > base["FLAT"]
+    # Symbols without mentions share the neutral 0.5 component, so their
+    # ordering relative to each other is unchanged.
+    assert (new["CRASHER"] > new["STEADY_UP"]) == (base["CRASHER"] > base["STEADY_UP"])
+    # 3m/1y never see social data.
+    assert other_composites() == base_other
+
+    breakdowns = {
+        sym: json.loads(raw)
+        for sym, raw in con.execute(
+            "SELECT symbol, breakdown FROM picks WHERE horizon = '1w' AND rank > 0"
+        ).fetchall()
+    }
+    assert breakdowns["FLAT"]["froth"] is True  # spike 40 >= 3, bullish 1.0 >= 0.8
+    assert breakdowns["FLAT"]["attention"] == {
+        "value": pytest.approx(40.0),
+        "pctile": pytest.approx(1.0),
+    }
+    assert "attention" in breakdowns["CHOPPY"]
+    assert "froth" not in breakdowns["CHOPPY"]  # spike 2.0 < 3
+    for sym in ("CRASHER", "STEADY_UP"):  # no mentions -> no attention entry
+        assert "attention" not in breakdowns[sym]
+        assert "froth" not in breakdowns[sym]

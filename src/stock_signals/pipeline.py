@@ -196,7 +196,38 @@ def main() -> int:
         # (g) news RSS
         _run_step(steps, "news", lambda: _ingest_news(con, cfg))
 
-        # (h) EDGAR fundamentals — weekly (Mondays), or whenever xbrl_facts is empty
+        # (h) social sentiment: Reddit posts + Bluesky search -> social_posts
+        def _social() -> StepResult:
+            from stock_signals.ingest.bluesky import BlueskySource
+            from stock_signals.ingest.reddit_src import RedditSource
+            from stock_signals.sentiment import process_posts
+
+            reddit = RedditSource(cfg)
+            bluesky = BlueskySource(cfg)
+            if not reddit.available and not bluesky.available:
+                return 0, "skipped (no REDDIT_CLIENT_ID/SECRET or BLUESKY creds)"
+            valid = {row[0] for row in _universe_rows(con)}
+            total = 0
+            parts: list[str] = []
+            if reddit.available:
+                posts = reddit.recent_posts()
+                total += process_posts(con, posts, valid)
+                parts.append(f"reddit {len(posts)} posts")
+            if bluesky.available:
+                hot = con.execute(
+                    "SELECT symbol, count(*) c FROM social_posts "
+                    "WHERE created > now() - INTERVAL 1 DAY "
+                    "GROUP BY symbol ORDER BY c DESC LIMIT 15"
+                ).fetchall()
+                for symbol, _ in hot:
+                    found = bluesky.search_posts(f"{symbol} stock")
+                    total += process_posts(con, found, valid)
+                parts.append(f"bluesky {len(hot)} symbols")
+            return total, " + ".join(parts) or "no sources"
+
+        _run_step(steps, "social", _social)
+
+        # (i) EDGAR fundamentals — weekly (Mondays), or whenever xbrl_facts is empty
         def _fundamentals() -> StepResult:
             from stock_signals.fundamentals import refresh_fundamentals
 

@@ -25,7 +25,9 @@ HORIZONS: tuple[tuple[str, str, str], ...] = (
         "1w",
         "1 Week",
         "Attention watchlist — short-horizon signals are the weakest and "
-        "highest-turnover. Backtest pending.",
+        "highest-turnover. Backtest pending. Attention = social mention "
+        "spikes (Reddit/Bluesky); a 'crowded' badge is a warning, not a "
+        "buy signal.",
     ),
     (
         "3m",
@@ -51,19 +53,24 @@ _EVENT_FORMS = ("8-K", "SCHEDULE 13D", "SCHEDULE 13D/A")
 # --------------------------------------------------------------------------
 
 
-def _parse_breakdown(raw: str | None) -> list[dict[str, Any]]:
-    """breakdown JSON text -> [{name, value, pctile}, ...] (tolerant)."""
+def _parse_breakdown(raw: str | None) -> tuple[list[dict[str, Any]], bool]:
+    """breakdown JSON text -> ([{name, value, pctile}, ...], froth) (tolerant).
+
+    ``froth`` is the display-only crowding warning written by factors.py
+    (a bare boolean alongside the per-factor dicts, never a factor itself).
+    """
     try:
         parsed = json.loads(raw) if raw else {}
     except (TypeError, ValueError):
         parsed = {}
     if not isinstance(parsed, dict):
-        return []
-    return [
+        return [], False
+    factors = [
         {"name": name, "value": d.get("value"), "pctile": d.get("pctile")}
         for name, d in parsed.items()
         if isinstance(d, dict)
     ]
+    return factors, parsed.get("froth") is True
 
 
 def _recent_events(con: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
@@ -126,13 +133,15 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         hz: {"buy": [], "sell": []} for hz, _, _ in HORIZONS
     }
     for horizon, rank, symbol, name, sector, composite, breakdown in rows:
+        factors, froth = _parse_breakdown(breakdown)
         entry = {
             "rank": rank,
             "symbol": symbol,
             "name": name or "",
             "sector": sector or "",
             "composite": composite,
-            "factors": _parse_breakdown(breakdown),
+            "factors": factors,
+            "froth": froth,
         }
         bucket = horizons.setdefault(horizon, {"buy": [], "sell": []})
         (bucket["buy"] if rank > 0 else bucket["sell"]).append(entry)
@@ -230,6 +239,10 @@ td.factors { white-space: normal; min-width: 260px; }
   font-variant-numeric: tabular-nums;
 }
 .chip.filing { background: var(--filing-bg); color: var(--filing-text); }
+.chip.crowded {
+  background: var(--banner-bg); color: var(--banner-text);
+  border: 1px solid var(--banner-border); font-weight: 600; cursor: help;
+}
 td.empty { color: var(--muted); font-style: italic; white-space: normal; }
 details.filings {
   margin: 0 0 1.3rem; padding: .55rem .95rem;
@@ -264,6 +277,12 @@ _JS = """
     return v.toFixed(2);
   }
 
+  // attention_spike is a mentions multiplier, not a return: \\u00d7N.N.
+  function fmtMult(v) {
+    if (typeof v !== "number" || !isFinite(v)) return "\\u2014";
+    return "\\u00d7" + v.toFixed(1);
+  }
+
   function fmtPctile(p) {
     if (typeof p !== "number" || !isFinite(p)) return "";
     var x = p <= 1 ? p * 100 : p;
@@ -274,8 +293,18 @@ _JS = """
   function chip(f) {
     var span = document.createElement("span");
     span.className = "chip";
+    var val = f.name === "attention" ? fmtMult(f.value) : fmtValue(f.value);
     var pt = fmtPctile(f.pctile);
-    span.textContent = f.name + " " + fmtValue(f.value) + (pt ? " \\u00b7 " + pt : "");
+    span.textContent = f.name + " " + val + (pt ? " \\u00b7 " + pt : "");
+    return span;
+  }
+
+  function crowdedChip() {
+    var span = document.createElement("span");
+    span.className = "chip crowded";
+    span.textContent = "crowded";
+    span.title = "High mention spike with extreme bullishness \\u2014 " +
+      "historically a contrarian signal";
     return span;
   }
 
@@ -319,6 +348,7 @@ _JS = """
       var chips = document.createElement("div");
       chips.className = "chips";
       (r.factors || []).forEach(function (f) { chips.appendChild(chip(f)); });
+      if (r.froth) chips.appendChild(crowdedChip());
       var ev = filings ? filings[r.symbol] : null;
       if (ev) {
         var flag = document.createElement("span");

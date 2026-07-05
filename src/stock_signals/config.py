@@ -22,6 +22,8 @@ class Config:
     anthropic_key: str | None
     reddit_client_id: str | None
     reddit_client_secret: str | None
+    bluesky_handle: str | None = None
+    bluesky_app_password: str | None = None
     data_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "data")
 
     @property
@@ -47,4 +49,6 @@ def load_config(env_file: Path | None = None) -> Config:
         anthropic_key=_env("ANTHROPIC_API_KEY"),
         reddit_client_id=_env("REDDIT_CLIENT_ID"),
         reddit_client_secret=_env("REDDIT_CLIENT_SECRET"),
+        bluesky_handle=_env("BLUESKY_HANDLE"),
+        bluesky_app_password=_env("BLUESKY_APP_PASSWORD"),
     )
