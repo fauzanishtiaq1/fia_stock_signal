@@ -23,7 +23,10 @@ class TiingoSource(Source):
 
     @property
     def _headers(self) -> dict[str, str]:
-        return {"Authorization": f"Token {self.key}"}
+        return {
+            "Authorization": f"Token {self.key}",
+            "Content-Type": "application/json",
+        }
 
     def daily_history(self, symbol: str, start: str = "1990-01-01") -> pd.DataFrame:
         """Full daily OHLCV history since `start`, shaped for prices_daily."""
@@ -52,5 +55,8 @@ class TiingoSource(Source):
         return out[PRICE_COLUMNS]
 
     def _healthcheck_call(self) -> str:
-        resp = self._get(f"{BASE}/api/test/", headers=self._headers)
-        return resp.text.strip()
+        # /api/test does not validate the token, so prove auth with a real
+        # metadata request instead.
+        resp = self._get(f"{BASE}/tiingo/daily/AAPL", headers=self._headers)
+        meta = resp.json()
+        return f"AAPL history {meta.get('startDate', '?')[:10]} → {meta.get('endDate', '?')[:10]}"
