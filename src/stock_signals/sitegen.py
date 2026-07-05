@@ -3,6 +3,7 @@
 Reads the latest run_date in ``picks``, joins ``universe`` for names and
 sectors, and writes a single HTML file with all CSS/JS inline and the data
 embedded as a JSON block — it works when opened directly via file://.
+Recent deal-relevant SEC filings from ``events`` surface on the 1-Week tab.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 import argparse
 import json
 from datetime import datetime, timezone
+from html import escape
 from pathlib import Path
 from typing import Any
 
@@ -40,6 +42,9 @@ HORIZONS: tuple[tuple[str, str, str], ...] = (
 
 _COLUMNS = ("Rank", "Symbol", "Name", "Sector", "Score", "Factors")
 
+#: SEC forms considered deal-relevant for the 1-Week tab.
+_EVENT_FORMS = ("8-K", "SCHEDULE 13D", "SCHEDULE 13D/A")
+
 
 # --------------------------------------------------------------------------
 # Data
@@ -58,6 +63,42 @@ def _parse_breakdown(raw: str | None) -> list[dict[str, Any]]:
         {"name": name, "value": d.get("value"), "pctile": d.get("pctile")}
         for name, d in parsed.items()
         if isinstance(d, dict)
+    ]
+
+
+def _recent_events(con: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
+    """Deal-relevant filings for universe companies from the last 7 days.
+
+    The window is anchored to the newest ``filed`` timestamp in ``events`` so
+    stale local data still shows something sensible. ``universe.cik`` is a
+    10-digit zero-padded string while ``events.cik`` may be unpadded, so the
+    join compares both sides as BIGINT (NULL ciks never match).
+    """
+    placeholders = ", ".join("?" for _ in _EVENT_FORMS)
+    rows = con.execute(
+        f"""
+        SELECT u.symbol, u.name, e.form, CAST(e.filed AS DATE), e.title, e.url
+        FROM events AS e
+        JOIN universe AS u
+          ON TRY_CAST(e.cik AS BIGINT) = TRY_CAST(u.cik AS BIGINT)
+        WHERE TRY_CAST(e.cik AS BIGINT) IS NOT NULL
+          AND e.form IN ({placeholders})
+          AND e.filed >= (SELECT max(filed) FROM events) - INTERVAL 7 DAY
+        ORDER BY e.filed DESC, u.symbol, e.accession
+        LIMIT 30
+        """,
+        list(_EVENT_FORMS),
+    ).fetchall()
+    return [
+        {
+            "symbol": symbol,
+            "name": name or "",
+            "form": form,
+            "filed": str(filed),
+            "title": title or "",
+            "url": url or "",
+        }
+        for symbol, name, form, filed, title, url in rows
     ]
 
 
@@ -104,6 +145,7 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         "run_date": str(run_date),
         "coverage": {"scored": int(scored or 0), "total": int(total or 0)},
         "horizons": horizons,
+        "events": _recent_events(con),
     }
 
 
@@ -118,6 +160,7 @@ _CSS = """
   --pos: #15803d; --neg: #b91c1c;
   --banner-bg: #fdf3d7; --banner-text: #6f5205; --banner-border: #eddfad;
   --chip-bg: #edeff3;
+  --filing-bg: #e3eafb; --filing-text: #3a5fc0;
 }
 @media (prefers-color-scheme: dark) {
   :root {
@@ -126,6 +169,7 @@ _CSS = """
     --pos: #4ade80; --neg: #f87171;
     --banner-bg: #29230f; --banner-text: #e8cf83; --banner-border: #493e1a;
     --chip-bg: #242932;
+    --filing-bg: #212b42; --filing-text: #a3bcf8;
   }
 }
 * { box-sizing: border-box; }
@@ -185,7 +229,21 @@ td.factors { white-space: normal; min-width: 260px; }
   background: var(--chip-bg); font-size: .78rem; white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
+.chip.filing { background: var(--filing-bg); color: var(--filing-text); }
 td.empty { color: var(--muted); font-style: italic; white-space: normal; }
+details.filings {
+  margin: 0 0 1.3rem; padding: .55rem .95rem;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px;
+}
+details.filings summary {
+  cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--muted);
+}
+details.filings summary:hover { color: var(--text); }
+.filings-list { margin: .55rem 0 .2rem; padding-left: 1.15rem; font-size: .9rem; }
+.filings-list li { margin: .3rem 0; overflow-wrap: anywhere; }
+.filings-list .filing-symbol { font-weight: 600; }
+.filings-list a { color: var(--accent); }
 footer {
   margin-top: 2.75rem; padding-top: 1.1rem; border-top: 1px solid var(--border);
   color: var(--muted); font-size: .85rem;
@@ -221,7 +279,18 @@ _JS = """
     return span;
   }
 
-  function fill(tbody, rows) {
+  var MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  function shortDate(iso) {
+    var p = String(iso || "").split("-");
+    var m = parseInt(p[1], 10);
+    var d = parseInt(p[2], 10);
+    if (!(m >= 1 && m <= 12) || !(d >= 1)) return iso || "";
+    return MONTHS[m - 1] + " " + d;
+  }
+
+  function fill(tbody, rows, filings) {
     if (!rows.length) {
       var tr = document.createElement("tr");
       var td = document.createElement("td");
@@ -250,15 +319,32 @@ _JS = """
       var chips = document.createElement("div");
       chips.className = "chips";
       (r.factors || []).forEach(function (f) { chips.appendChild(chip(f)); });
+      var ev = filings ? filings[r.symbol] : null;
+      if (ev) {
+        var flag = document.createElement("span");
+        flag.className = "chip filing";
+        flag.textContent = ev.form + " \\u00b7 " + shortDate(ev.filed);
+        chips.appendChild(flag);
+      }
       td.appendChild(chips);
       tr.appendChild(td);
       tbody.appendChild(tr);
     });
   }
 
+  var latestFiling = {};
+  (data.events || []).forEach(function (e) {
+    if (!latestFiling[e.symbol]) latestFiling[e.symbol] = e; // newest first
+  });
+
   document.querySelectorAll("table[data-horizon]").forEach(function (t) {
-    var h = data.horizons[t.getAttribute("data-horizon")] || { buy: [], sell: [] };
-    fill(t.querySelector("tbody"), h[t.getAttribute("data-list")] || []);
+    var hz = t.getAttribute("data-horizon");
+    var h = data.horizons[hz] || { buy: [], sell: [] };
+    fill(
+      t.querySelector("tbody"),
+      h[t.getAttribute("data-list")] || [],
+      hz === "1w" ? latestFiling : null
+    );
   });
 
   var buttons = document.querySelectorAll(".tab-btn");
@@ -307,14 +393,41 @@ def _table_html(hz: str, kind: str, heading: str) -> str:
       </div>"""
 
 
-def _panels_html() -> str:
+def _filings_html(events: list[dict[str, Any]]) -> str:
+    """Collapsible list of recent deal filings for the 1-Week tab ("" if none)."""
+    if not events:
+        return ""
+    items: list[str] = []
+    for ev in events:
+        url = ev["url"]
+        text = escape(ev["title"] or url or ev["form"])
+        if url:
+            href = escape(url, quote=True)
+            text = f'<a href="{href}" target="_blank" rel="noopener">{text}</a>'
+        items.append(
+            f'<li><span class="filing-symbol">{escape(ev["symbol"])}</span>'
+            f' &mdash; {escape(ev["form"])} &mdash; {escape(ev["filed"])}'
+            f" &mdash; {text}</li>"
+        )
+    body = "\n          ".join(items)
+    return f"""
+      <details class="filings">
+        <summary>Recent deal filings (last 7 days)</summary>
+        <ul class="filings-list">
+          {body}
+        </ul>
+      </details>"""
+
+
+def _panels_html(filings: str) -> str:
     parts: list[str] = []
     for i, (hz, _, caption) in enumerate(HORIZONS):
         active = " active" if i == 0 else ""
+        extras = filings if hz == "1w" else ""
         parts.append(
             f"""
     <section class="panel{active}" id="panel-{hz}" role="tabpanel" aria-labelledby="tab-{hz}">
-      <p class="caption">{caption}</p>{_table_html(hz, "buy", "Buy candidates")}{_table_html(hz, "sell", "Sell candidates")}
+      <p class="caption">{caption}</p>{extras}{_table_html(hz, "buy", "Buy candidates")}{_table_html(hz, "sell", "Sell candidates")}
     </section>"""
         )
     return "".join(parts)
@@ -323,6 +436,7 @@ def _panels_html() -> str:
 def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
     cov = payload["coverage"]
     coverage_line = f"{cov['scored']} of {cov['total']} symbols scored"
+    panels = _panels_html(_filings_html(payload.get("events", [])))
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -342,7 +456,7 @@ def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
     <nav class="tabs" role="tablist" aria-label="Horizon">
       {_tabs_html()}
     </nav>
-{_panels_html()}
+{panels}
     <noscript><p class="caption">Enable JavaScript to see the ranked tables.</p></noscript>
     <footer>
       <p>Generated {generated_at}.</p>

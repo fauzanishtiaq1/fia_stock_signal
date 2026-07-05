@@ -196,17 +196,29 @@ def main() -> int:
         # (g) news RSS
         _run_step(steps, "news", lambda: _ingest_news(con, cfg))
 
-        # (h) factor scores -> scores/picks tables
+        # (h) EDGAR fundamentals — weekly (Mondays), or whenever xbrl_facts is empty
+        def _fundamentals() -> StepResult:
+            from stock_signals.fundamentals import refresh_fundamentals
+
+            empty = con.execute("SELECT count(*) FROM xbrl_facts").fetchone()[0] == 0
+            if date.today().weekday() != 0 and not empty:
+                return 0, "skipped (weekly)"
+            symbols_ok, rows = refresh_fundamentals(con, cfg)
+            return rows, f"{symbols_ok} symbols refreshed"
+
+        _run_step(steps, "fundamentals", _fundamentals)
+
+        # (i) factor scores -> scores/picks tables
         def _scores() -> StepResult:
             from stock_signals.factors import compute_and_store
 
             counts = compute_and_store(con)
-            detail = ", ".join(f"{h}:{n}" for h, n in counts.items())
-            return sum(counts.values()), f"eligible {detail}"
+            detail = ", ".join(f"{h}:{v['eligible']} ({v['mode']})" for h, v in counts.items())
+            return sum(v["eligible"] for v in counts.values()), f"eligible {detail}"
 
         _run_step(steps, "scores", _scores)
 
-        # (i) regenerate the static site from the latest picks
+        # (j) regenerate the static site from the latest picks
         def _site() -> StepResult:
             from stock_signals.sitegen import generate
 
@@ -215,7 +227,7 @@ def main() -> int:
 
         _run_step(steps, "site", _site)
 
-        # (j) persist tables to parquet so CI can commit them back
+        # (k) persist tables to parquet so CI can commit them back
         def _persist() -> StepResult:
             from stock_signals.persist import export_tables
 
@@ -227,7 +239,7 @@ def main() -> int:
 
         con.close()
 
-    # (i) last_run.json + summary
+    # (l) last_run.json + summary
     payload = {"run_at_utc": datetime.now(timezone.utc).isoformat(), "steps": steps}
     data_dir = cfg.data_dir if cfg is not None else PROJECT_ROOT / "data"
     try:

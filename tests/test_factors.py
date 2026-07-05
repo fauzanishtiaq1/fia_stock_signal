@@ -51,7 +51,11 @@ def scored_con(con):
     )
     db.upsert_df(con, "prices_daily", _synthetic_prices())
     counts = compute_and_store(con, run_date=RUN_DATE)
-    assert counts == {"1w": 4, "3m": 4, "1y": 4}
+    assert counts == {
+        "1w": {"eligible": 4, "mode": "full"},
+        "3m": {"eligible": 4, "mode": "full"},
+        "1y": {"eligible": 4, "mode": "preview"},  # no fundamentals in this db
+    }
     return con
 
 

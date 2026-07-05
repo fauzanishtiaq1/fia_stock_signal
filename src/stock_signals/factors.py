@@ -7,11 +7,21 @@ Factors (trading-day offsets on each symbol's own adj_close series):
   bars; with >= 240 bars the oldest available bar substitutes the 252-back leg)
 - ``low_vol_252``    std of daily pct-change over the last 252 bars (>= 240 bars)
 
+Fundamental factors for the 1y horizon (from fundamentals.latest_metrics):
+
+- ``value_ey``  earnings yield; its pctile is the earnings-yield pct rank
+- ``quality``   mean of the pct ranks of gross_profitability and roe (the
+  score is already a [0, 1] rank blend, so value == pctile for this factor)
+
 Composites per horizon (higher = stronger buy candidate):
 
 - ``1w``  pctile of negative reversal_5d (recent losers rank high)
 - ``3m``  pctile of momentum_12_1
-- ``1y``  0.5 * pctile(momentum_12_1) + 0.5 * pctile(negative low_vol_252)
+- ``1y``  full mode (fundamentals coverage >= FUNDAMENTALS_MIN_COVERAGE):
+  0.35 * value_ey + 0.35 * quality + 0.15 * pctile(momentum_12_1)
+  + 0.15 * pctile(negative low_vol_252); symbols without fundamentals are
+  excluded. Preview mode otherwise:
+  0.5 * pctile(momentum_12_1) + 0.5 * pctile(negative low_vol_252)
 
 Stored ``pctile`` values are the directional percentiles that feed the
 composite (e.g. the 1w reversal_5d pctile is the pct rank of the *negated*
@@ -32,11 +42,14 @@ from . import db
 from .config import load_config
 
 HORIZONS = ("1w", "3m", "1y")
-HORIZON_FACTORS: dict[str, list[str]] = {
+HORIZON_FACTORS: dict[str, list[str]] = {  # preview-mode 1y factor set
     "1w": ["reversal_5d"],
     "3m": ["momentum_12_1"],
     "1y": ["momentum_12_1", "low_vol_252"],
 }
+FULL_1Y_FACTORS = ["value_ey", "quality", "momentum_12_1", "low_vol_252"]
+FULL_1Y_WEIGHTS = {"value_ey": 0.35, "quality": 0.35, "momentum_12_1": 0.15, "low_vol_252": 0.15}
+FUNDAMENTALS_MIN_COVERAGE = 100  # symbols with fundamentals needed for full 1y mode
 
 REVERSAL_BARS = 5
 MOMENTUM_SKIP = 21
@@ -82,18 +95,46 @@ def _raw_factors(px: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def _fundamental_factors(
+    con: duckdb.DuckDBPyConnection, symbols: pd.Index
+) -> tuple[pd.DataFrame, pd.DataFrame] | None:
+    """value_ey/quality raw values and pctiles for the full 1y composite.
+
+    Returns None (preview mode) unless at least FUNDAMENTALS_MIN_COVERAGE of
+    ``symbols`` have earnings_yield, gross_profitability and roe. Ranks are
+    computed within that covered set; other symbols get NaN (excluded).
+    """
+    from . import fundamentals
+
+    metrics = fundamentals.latest_metrics(con)
+    if metrics.empty:
+        return None
+    m = metrics.set_index("symbol").reindex(symbols)
+    m = m[["earnings_yield", "gross_profitability", "roe"]].dropna()
+    if len(m) < FUNDAMENTALS_MIN_COVERAGE:
+        return None
+    quality = (m["gross_profitability"].rank(pct=True) + m["roe"].rank(pct=True)) / 2.0
+    raw = pd.DataFrame({"value_ey": m["earnings_yield"], "quality": quality})
+    pct = pd.DataFrame({"value_ey": m["earnings_yield"].rank(pct=True), "quality": quality})
+    return raw.reindex(symbols), pct.reindex(symbols)
+
+
 def compute_and_store(
     con: duckdb.DuckDBPyConnection, run_date: date | None = None
-) -> dict[str, int]:
+) -> dict[str, dict[str, int | str]]:
     """Compute factors/composites from prices_daily and upsert scores + picks.
 
-    Returns {horizon: eligible symbol count}. Symbols whose latest price is
-    more than 7 calendar days older than the global max date are dropped.
+    Returns {horizon: {"eligible": n, "mode": "full" | "preview"}}; only 1y
+    can run in preview mode (fundamentals coverage below the threshold).
+    Symbols whose latest price is more than 7 calendar days older than the
+    global max date are dropped.
     """
     run_date = run_date or date.today()
     px = con.execute("SELECT symbol, date, adj_close FROM prices_daily").df()
     if px.empty:
-        return {h: 0 for h in HORIZONS}
+        return {
+            h: {"eligible": 0, "mode": "preview" if h == "1y" else "full"} for h in HORIZONS
+        }
     px["date"] = pd.to_datetime(px["date"])
     latest = px.groupby("symbol")["date"].transform("max")
     px = px[latest >= px["date"].max() - pd.Timedelta(days=STALE_DAYS)]
@@ -110,18 +151,30 @@ def compute_and_store(
     composites: dict[str, pd.Series] = {
         "1w": pct["reversal_5d"],
         "3m": pct["momentum_12_1"],
-        "1y": 0.5 * pct["momentum_12_1"] + 0.5 * pct["low_vol_252"],
     }
+    factor_sets = {h: list(f) for h, f in HORIZON_FACTORS.items()}
+    modes = {h: "full" for h in HORIZONS}
+
+    fund = _fundamental_factors(con, raw.index)
+    if fund is None:
+        modes["1y"] = "preview"
+        composites["1y"] = 0.5 * pct["momentum_12_1"] + 0.5 * pct["low_vol_252"]
+    else:
+        fund_raw, fund_pct = fund
+        raw = raw.join(fund_raw)
+        pct = pct.join(fund_pct)
+        factor_sets["1y"] = FULL_1Y_FACTORS
+        composites["1y"] = sum(w * pct[f] for f, w in FULL_1Y_WEIGHTS.items())
 
     score_frames: list[pd.DataFrame] = []
     pick_frames: list[pd.DataFrame] = []
-    counts: dict[str, int] = {}
+    counts: dict[str, dict[str, int | str]] = {}
     for horizon in HORIZONS:
         comp = composites[horizon].dropna().sort_values(ascending=False)
-        counts[horizon] = len(comp)
+        counts[horizon] = {"eligible": len(comp), "mode": modes[horizon]}
         if comp.empty:
             continue
-        factors = HORIZON_FACTORS[horizon]
+        factors = factor_sets[horizon]
         for factor in factors:
             score_frames.append(
                 pd.DataFrame(
@@ -194,7 +247,8 @@ def main(argv: list[str] | None = None) -> None:
     finally:
         con.close()
     for horizon in HORIZONS:
-        print(f"{horizon}: {counts.get(horizon, 0)} eligible symbols")
+        info = counts.get(horizon, {"eligible": 0, "mode": "preview"})
+        print(f"{horizon}: {info['eligible']} eligible symbols ({info['mode']} mode)")
 
 
 if __name__ == "__main__":
