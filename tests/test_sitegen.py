@@ -23,12 +23,12 @@ def _insert_fixture(con) -> None:
             "vol": {"value": 12.5, "pctile": 0.12},
         }
     )
-    avoid_breakdown = json.dumps({"mom12-1": {"value": -0.21, "pctile": 0.03}})
+    sell_breakdown = json.dumps({"mom12-1": {"value": -0.21, "pctile": 0.03}})
     for horizon in ("1w", "3m", "1y"):
         rows = [
             (1, "AAPL", 0.91, top_breakdown),
-            (-1, "XYZ", 0.08, avoid_breakdown),
-            (-2, "ABC", 0.12, avoid_breakdown),
+            (-1, "XYZ", 0.08, sell_breakdown),
+            (-2, "ABC", 0.12, sell_breakdown),
         ]
         for rank, symbol, composite, breakdown in rows:
             con.execute(
@@ -69,11 +69,11 @@ def test_generate_site(con, tmp_path):
     assert set(payload["horizons"]) == {"1w", "3m", "1y"}
     for horizon in ("1w", "3m", "1y"):
         bucket = payload["horizons"][horizon]
-        assert [e["symbol"] for e in bucket["top"]] == ["AAPL"]
-        # Avoid list is worst-first: rank -1 before rank -2.
-        assert [e["rank"] for e in bucket["avoid"]] == [-1, -2]
-        assert bucket["avoid"][0]["symbol"] == "XYZ"
-        top = bucket["top"][0]
+        assert [e["symbol"] for e in bucket["buy"]] == ["AAPL"]
+        # Sell list is worst-first: rank -1 before rank -2.
+        assert [e["rank"] for e in bucket["sell"]] == [-1, -2]
+        assert bucket["sell"][0]["symbol"] == "XYZ"
+        top = bucket["buy"][0]
         assert top["name"] == "Apple Inc."
         assert top["sector"] == "Information Technology"
         factors = {f["name"]: f for f in top["factors"]}

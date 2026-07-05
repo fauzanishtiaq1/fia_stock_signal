@@ -82,7 +82,7 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
     total = con.execute("SELECT count(*) FROM universe").fetchone()[0]
 
     horizons: dict[str, dict[str, list[dict[str, Any]]]] = {
-        hz: {"top": [], "avoid": []} for hz, _, _ in HORIZONS
+        hz: {"buy": [], "sell": []} for hz, _, _ in HORIZONS
     }
     for horizon, rank, symbol, name, sector, composite, breakdown in rows:
         entry = {
@@ -93,12 +93,12 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
             "composite": composite,
             "factors": _parse_breakdown(breakdown),
         }
-        bucket = horizons.setdefault(horizon, {"top": [], "avoid": []})
-        (bucket["top"] if rank > 0 else bucket["avoid"]).append(entry)
+        bucket = horizons.setdefault(horizon, {"buy": [], "sell": []})
+        (bucket["buy"] if rank > 0 else bucket["sell"]).append(entry)
 
     for bucket in horizons.values():
-        bucket["top"].sort(key=lambda e: e["rank"])  # 1 (best) first
-        bucket["avoid"].sort(key=lambda e: e["rank"], reverse=True)  # -1 (worst) first
+        bucket["buy"].sort(key=lambda e: e["rank"])  # 1 (best) first
+        bucket["sell"].sort(key=lambda e: e["rank"], reverse=True)  # -1 (worst) first
 
     return {
         "run_date": str(run_date),
@@ -176,8 +176,8 @@ th {
 }
 td.symbol { font-weight: 600; }
 td.score { font-weight: 600; font-variant-numeric: tabular-nums; }
-table.top td.score { color: var(--pos); }
-table.avoid td.score { color: var(--neg); }
+table.buy td.score { color: var(--pos); }
+table.sell td.score { color: var(--neg); }
 td.factors { white-space: normal; min-width: 260px; }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .chip {
@@ -257,7 +257,7 @@ _JS = """
   }
 
   document.querySelectorAll("table[data-horizon]").forEach(function (t) {
-    var h = data.horizons[t.getAttribute("data-horizon")] || { top: [], avoid: [] };
+    var h = data.horizons[t.getAttribute("data-horizon")] || { buy: [], sell: [] };
     fill(t.querySelector("tbody"), h[t.getAttribute("data-list")] || []);
   });
 
@@ -314,7 +314,7 @@ def _panels_html() -> str:
         parts.append(
             f"""
     <section class="panel{active}" id="panel-{hz}" role="tabpanel" aria-labelledby="tab-{hz}">
-      <p class="caption">{caption}</p>{_table_html(hz, "top", "Top candidates")}{_table_html(hz, "avoid", "Avoid / weakest")}
+      <p class="caption">{caption}</p>{_table_html(hz, "buy", "Buy candidates")}{_table_html(hz, "sell", "Sell candidates")}
     </section>"""
         )
     return "".join(parts)
