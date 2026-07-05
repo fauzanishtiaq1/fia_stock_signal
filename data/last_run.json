@@ -1,10 +1,10 @@
 {
-  "run_at_utc": "2026-07-04T21:49:16.639287+00:00",
+  "run_at_utc": "2026-07-05T07:35:18.029407+00:00",
   "steps": {
     "setup": {
       "ok": true,
       "rows": 0,
-      "detail": "db at /Users/fauzanishtiaq/stock-signals/data/signals.duckdb"
+      "detail": "db at /home/runner/work/fia_stock_signal/fia_stock_signal/data/signals.duckdb"
     },
     "universe": {
       "ok": true,
@@ -17,14 +17,14 @@
       "detail": "8-K + SCHEDULE 13D filings"
     },
     "macro": {
-      "ok": true,
+      "ok": false,
       "rows": 0,
-      "detail": "skipped (no FRED_API_KEY)"
+      "detail": "AttributeError: type object 'FredSource' has no attribute 'DEFAULT_SERIES'"
     },
     "prices": {
       "ok": true,
-      "rows": 0,
-      "detail": "skipped (no FMP_API_KEY)"
+      "rows": 6006,
+      "detail": "503 symbols since 2025-05-31, 481 errors"
     },
     "news": {
       "ok": true,
