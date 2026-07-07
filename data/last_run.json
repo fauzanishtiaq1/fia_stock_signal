@@ -1,10 +1,15 @@
 {
-  "run_at_utc": "2026-07-05T07:35:18.029407+00:00",
+  "run_at_utc": "2026-07-07T08:53:15.263920+00:00",
   "steps": {
     "setup": {
       "ok": true,
       "rows": 0,
       "detail": "db at /home/runner/work/fia_stock_signal/fia_stock_signal/data/signals.duckdb"
+    },
+    "restore": {
+      "ok": true,
+      "rows": 532268,
+      "detail": "7 tables restored"
     },
     "universe": {
       "ok": true,
@@ -13,23 +18,48 @@
     },
     "events": {
       "ok": true,
-      "rows": 256,
+      "rows": 274,
       "detail": "8-K + SCHEDULE 13D filings"
     },
     "macro": {
-      "ok": false,
-      "rows": 0,
-      "detail": "AttributeError: type object 'FredSource' has no attribute 'DEFAULT_SERIES'"
+      "ok": true,
+      "rows": 8948,
+      "detail": "5 series since 2015-01-01"
     },
     "prices": {
       "ok": true,
-      "rows": 6006,
-      "detail": "503 symbols since 2025-05-31, 481 errors"
+      "rows": 6302,
+      "detail": "503 symbols since 2025-06-02, 480 errors"
     },
     "news": {
       "ok": true,
       "rows": 1250,
       "detail": "25 symbols"
+    },
+    "social": {
+      "ok": true,
+      "rows": 0,
+      "detail": "skipped (no REDDIT_CLIENT_ID/SECRET or BLUESKY creds)"
+    },
+    "fundamentals": {
+      "ok": true,
+      "rows": 0,
+      "detail": "skipped (weekly)"
+    },
+    "scores": {
+      "ok": true,
+      "rows": 1268,
+      "detail": "eligible 1w:501 (full), 3m:498 (full), 1y:269 (full)"
+    },
+    "site": {
+      "ok": true,
+      "rows": 0,
+      "detail": "/home/runner/work/fia_stock_signal/fia_stock_signal/data/site/index.html"
+    },
+    "persist": {
+      "ok": true,
+      "rows": 545116,
+      "detail": "8 tables exported (545116 rows)"
     }
   }
 }
