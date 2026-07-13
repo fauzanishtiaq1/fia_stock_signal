@@ -210,3 +210,36 @@ def test_crowded_badge_and_attention_chip(con, tmp_path):
         "Attention = social mention spikes (Reddit/Bluesky); a 'crowded' "
         "badge is a warning, not a buy signal." in html
     )
+
+
+def test_price_column_from_stored_close(con, tmp_path):
+    """Picks gain a Price column fed by the latest stored close (no network)."""
+    import json
+    import re
+    from datetime import date
+
+    from stock_signals.sitegen import generate
+
+    con.execute(
+        "INSERT INTO universe (symbol, name, sector) VALUES ('PXY', 'Proxy Corp', 'Tech')"
+    )
+    con.execute(
+        "INSERT INTO picks VALUES (DATE '2026-07-05', '1w', 1, 'PXY', 0.9, '{}')"
+    )
+    for d, px in [(date(2026, 7, 1), 10.0), (date(2026, 7, 2), 12.5)]:
+        con.execute(
+            "INSERT INTO prices_daily (symbol, date, close, adj_close, source) "
+            "VALUES ('PXY', ?, ?, ?, 'test')",
+            [d, px, px],
+        )
+    out = generate(con, out_path=tmp_path / "index.html")
+    html = out.read_text()
+    m = re.search(
+        r'<script type="application/json" id="ss-data">(.*?)</script>', html, re.S
+    )
+    payload = json.loads(m.group(1).replace("<\\/", "</"))
+    entry = payload["horizons"]["1w"]["buy"][0]
+    assert entry["price"] == 12.5  # latest close, not the older one
+    assert entry["change_pct"] is None  # no live quote without a key
+    assert payload["prices_asof"].startswith("last close")
+    assert "<th>Price</th>" in html

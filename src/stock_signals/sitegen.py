@@ -17,7 +17,7 @@ from typing import Any
 
 import duckdb
 
-from stock_signals.config import PROJECT_ROOT, load_config
+from stock_signals.config import PROJECT_ROOT, Config, load_config
 
 #: (horizon key, tab label, caption shown under the tab title)
 HORIZONS: tuple[tuple[str, str, str], ...] = (
@@ -42,7 +42,7 @@ HORIZONS: tuple[tuple[str, str, str], ...] = (
     ),
 )
 
-_COLUMNS = ("Rank", "Symbol", "Name", "Sector", "Score", "Factors")
+_COLUMNS = ("Rank", "Symbol", "Name", "Sector", "Price", "Score", "Factors")
 
 #: SEC forms considered deal-relevant for the 1-Week tab.
 _EVENT_FORMS = ("8-K", "SCHEDULE 13D", "SCHEDULE 13D/A")
@@ -109,7 +109,59 @@ def _recent_events(con: duckdb.DuckDBPyConnection) -> list[dict[str, Any]]:
     ]
 
 
-def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
+def _prices_for(
+    con: duckdb.DuckDBPyConnection,
+    symbols: list[str],
+    config: Config | None,
+) -> tuple[dict[str, dict[str, float | None]], str]:
+    """Latest price and day-change per symbol, plus an as-of label.
+
+    Baseline is the last stored close; when a Finnhub key is available the
+    listed symbols are upgraded to live quotes at generation time (the page
+    itself never calls any API or embeds a key).
+    """
+    if not symbols:
+        return {}, ""
+    marks = ",".join("?" * len(symbols))
+    rows = con.execute(
+        f"""
+        SELECT symbol, close, date FROM (
+            SELECT symbol, close, date,
+                   row_number() OVER (PARTITION BY symbol ORDER BY date DESC) AS rn
+            FROM prices_daily WHERE symbol IN ({marks})
+        ) WHERE rn = 1
+        """,
+        symbols,
+    ).fetchall()
+    prices: dict[str, dict[str, float | None]] = {
+        s: {"price": float(c), "change_pct": None} for s, c, _ in rows
+    }
+    asof = f"last close {max(d for _, _, d in rows)}" if rows else ""
+
+    if config is not None and config.finnhub_key:
+        from stock_signals.ingest.finnhub import FinnhubSource
+
+        src = FinnhubSource(config)
+        live = 0
+        for sym in symbols:
+            try:
+                q = src.quote(sym)
+            except Exception:  # noqa: BLE001 - keep the stored close
+                continue
+            if q.get("c"):
+                prices[sym] = {
+                    "price": float(q["c"]),
+                    "change_pct": float(q["dp"]) if q.get("dp") is not None else None,
+                }
+                live += 1
+        if live:
+            asof = f"live quotes ({live}/{len(symbols)} symbols)"
+    return prices, asof
+
+
+def _payload(
+    con: duckdb.DuckDBPyConnection, config: Config | None = None
+) -> dict[str, Any]:
     """Collect everything the page needs for the latest run_date in picks."""
     run_date = con.execute("SELECT max(run_date) FROM picks").fetchone()[0]
     if run_date is None:
@@ -128,6 +180,8 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         "SELECT count(DISTINCT symbol) FROM scores WHERE run_date = ?", [run_date]
     ).fetchone()[0]
     total = con.execute("SELECT count(*) FROM universe").fetchone()[0]
+    pick_symbols = sorted({r[2] for r in rows})
+    prices, prices_asof = _prices_for(con, pick_symbols, config)
 
     horizons: dict[str, dict[str, list[dict[str, Any]]]] = {
         hz: {"buy": [], "sell": []} for hz, _, _ in HORIZONS
@@ -142,6 +196,8 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
             "composite": composite,
             "factors": factors,
             "froth": froth,
+            "price": (prices.get(symbol) or {}).get("price"),
+            "change_pct": (prices.get(symbol) or {}).get("change_pct"),
         }
         bucket = horizons.setdefault(horizon, {"buy": [], "sell": []})
         (bucket["buy"] if rank > 0 else bucket["sell"]).append(entry)
@@ -155,6 +211,7 @@ def _payload(con: duckdb.DuckDBPyConnection) -> dict[str, Any]:
         "coverage": {"scored": int(scored or 0), "total": int(total or 0)},
         "horizons": horizons,
         "events": _recent_events(con),
+        "prices_asof": prices_asof,
     }
 
 
@@ -232,6 +289,10 @@ td.score { font-weight: 600; font-variant-numeric: tabular-nums; }
 table.buy td.score { color: var(--pos); }
 table.sell td.score { color: var(--neg); }
 td.factors { white-space: normal; min-width: 260px; }
+td.price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.delta { font-size: .78rem; font-weight: 600; }
+.delta-up { color: var(--pos); }
+.delta-down { color: var(--neg); }
 .chips { display: flex; flex-wrap: wrap; gap: .3rem; }
 .chip {
   display: inline-block; padding: .08rem .55rem; border-radius: 999px;
@@ -342,6 +403,21 @@ _JS = """
       cell(r.symbol, "symbol");
       cell(r.name || "\\u2014");
       cell(r.sector || "\\u2014");
+      var ptd = document.createElement("td");
+      ptd.className = "price";
+      if (r.price == null) {
+        ptd.textContent = "\\u2014";
+      } else {
+        ptd.textContent = "$" + r.price.toFixed(2);
+        if (r.change_pct != null) {
+          var delta = document.createElement("span");
+          delta.className = r.change_pct >= 0 ? "delta delta-up" : "delta delta-down";
+          delta.textContent = " " + (r.change_pct >= 0 ? "\\u25b2" : "\\u25bc") +
+            Math.abs(r.change_pct).toFixed(1) + "%";
+          ptd.appendChild(delta);
+        }
+      }
+      tr.appendChild(ptd);
       cell((r.composite * 100).toFixed(1), "score");
       var td = document.createElement("td");
       td.className = "factors";
@@ -466,6 +542,8 @@ def _panels_html(filings: str) -> str:
 def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
     cov = payload["coverage"]
     coverage_line = f"{cov['scored']} of {cov['total']} symbols scored"
+    asof = payload.get("prices_asof") or ""
+    prices_note = f" &middot; Prices: {asof}" if asof else ""
     panels = _panels_html(_filings_html(payload.get("events", [])))
     return f"""<!doctype html>
 <html lang="en">
@@ -480,7 +558,7 @@ def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
   <div class="wrap">
     <header>
       <h1>Stock Signals</h1>
-      <p class="meta">Run date {payload["run_date"]} &middot; {coverage_line}</p>
+      <p class="meta">Run date {payload["run_date"]} &middot; {coverage_line}{prices_note}</p>
     </header>
     <div class="banner" role="note">Personal research tool — not investment advice.</div>
     <nav class="tabs" role="tablist" aria-label="Horizon">
@@ -491,7 +569,7 @@ def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
     <footer>
       <p>Generated {generated_at}.</p>
       <p>Data sources: EDGAR, FMP, Twelve Data, Tiingo, FRED, Google News.</p>
-      <p>Phase 0 — ingestion and preview rankings only; factor backtests land in Phase 1.</p>
+      <p>Rankings are informational — backtest validation in progress.</p>
     </footer>
   </div>
   <script type="application/json" id="ss-data">{data_json}</script>
@@ -506,13 +584,17 @@ def _render(payload: dict[str, Any], data_json: str, generated_at: str) -> str:
 # --------------------------------------------------------------------------
 
 
-def generate(con: duckdb.DuckDBPyConnection, out_path: Path | None = None) -> Path:
+def generate(
+    con: duckdb.DuckDBPyConnection,
+    out_path: Path | None = None,
+    config: Config | None = None,
+) -> Path:
     """Write the self-contained site for the latest run_date; return its path."""
     if out_path is None:
         out_path = PROJECT_ROOT / "data" / "site" / "index.html"
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    payload = _payload(con)
+    payload = _payload(con, config)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     # "</" must not appear inside the inline <script> block; "<\/" is valid JSON.
     data_json = json.dumps(payload, separators=(",", ":")).replace("</", "<\\/")
@@ -533,9 +615,10 @@ def main(argv: list[str] | None = None) -> None:
 
     from stock_signals import db
 
-    con = db.connect(args.db or load_config().db_path)
+    cfg = load_config()
+    con = db.connect(args.db or cfg.db_path)
     try:
-        out = generate(con)
+        out = generate(con, config=cfg)
     finally:
         con.close()
     print(out)

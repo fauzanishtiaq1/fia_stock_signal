@@ -253,7 +253,7 @@ def main() -> int:
         def _site() -> StepResult:
             from stock_signals.sitegen import generate
 
-            path = generate(con)
+            path = generate(con, config=cfg)
             return 0, str(path)
 
         _run_step(steps, "site", _site)
