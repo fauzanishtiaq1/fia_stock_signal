@@ -1,5 +1,5 @@
 {
-  "run_at_utc": "2026-08-14T06:59:59.533168+00:00",
+  "run_at_utc": "2026-08-15T05:54:37.023542+00:00",
   "steps": {
     "setup": {
       "ok": true,
@@ -8,7 +8,7 @@
     },
     "restore": {
       "ok": true,
-      "rows": 570127,
+      "rows": 570495,
       "detail": "8 tables restored"
     },
     "universe": {
@@ -18,23 +18,23 @@
     },
     "events": {
       "ok": true,
-      "rows": 292,
+      "rows": 294,
       "detail": "8-K + SCHEDULE 13D filings"
     },
     "macro": {
       "ok": true,
-      "rows": 9035,
+      "rows": 9038,
       "detail": "5 series since 2015-01-01"
     },
     "prices": {
       "ok": true,
       "rows": 6348,
-      "detail": "504 symbols since 2025-07-10, 481 errors"
+      "detail": "504 symbols since 2025-07-11, 481 errors"
     },
     "news": {
-      "ok": false,
-      "rows": 0,
-      "detail": "RuntimeError: all 25 symbols failed"
+      "ok": true,
+      "rows": 1250,
+      "detail": "25 symbols"
     },
     "social": {
       "ok": true,
@@ -58,8 +58,8 @@
     },
     "persist": {
       "ok": true,
-      "rows": 570495,
-      "detail": "8 tables exported (570495 rows)"
+      "rows": 571470,
+      "detail": "8 tables exported (571470 rows)"
     }
   }
 }
