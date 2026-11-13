@@ -1,5 +1,5 @@
 {
-  "run_at_utc": "2026-11-12T13:59:14.792566+00:00",
+  "run_at_utc": "2026-11-13T13:23:21.175092+00:00",
   "steps": {
     "setup": {
       "ok": true,
@@ -8,7 +8,7 @@
     },
     "restore": {
       "ok": true,
-      "rows": 610302,
+      "rows": 610831,
       "detail": "8 tables restored"
     },
     "universe": {
@@ -23,17 +23,17 @@
     },
     "macro": {
       "ok": true,
-      "rows": 9227,
+      "rows": 9230,
       "detail": "5 series since 2015-01-01"
     },
     "prices": {
       "ok": true,
       "rows": 6348,
-      "detail": "513 symbols since 2025-10-08, 490 errors"
+      "detail": "513 symbols since 2025-10-09, 490 errors"
     },
     "news": {
       "ok": true,
-      "rows": 1176,
+      "rows": 1102,
       "detail": "25 symbols"
     },
     "social": {
@@ -58,8 +58,8 @@
     },
     "persist": {
       "ok": true,
-      "rows": 610831,
-      "detail": "8 tables exported (610831 rows)"
+      "rows": 611380,
+      "detail": "8 tables exported (611380 rows)"
     }
   }
 }
